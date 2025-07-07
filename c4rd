@@ -1,0 +1,303 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Cleanup old GUI
+if playerGui:FindFirstChild("MainUtilityGui") then
+	playerGui.MainUtilityGui:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui", playerGui)
+screenGui.Name = "MainUtilityGui"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+
+-- Minimize Button (center left of screen)
+local miniBtn = Instance.new("TextButton", screenGui)
+miniBtn.Name = "MinimizeButton"
+miniBtn.Size = UDim2.new(0, 36, 0, 36)
+-- Position vertically center-left (0 scale x, 0.5 scale y, offset 10 left, offset -18 up to center)
+miniBtn.Position = UDim2.new(0, 10, 0.5, -18)
+miniBtn.Text = "</>"
+miniBtn.Font = Enum.Font.Code
+miniBtn.TextSize = 18
+miniBtn.TextColor3 = Color3.new(1, 1, 1)
+miniBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Instance.new("UICorner", miniBtn).CornerRadius = UDim.new(0, 8)
+
+-- Main GUI Frame (smaller & centered)
+local frame = Instance.new("Frame", screenGui)
+frame.Name = "MainFrame"
+frame.Size = UDim2.new(0, 220, 0, 180)  -- smaller size
+-- Center of screen
+frame.Position = UDim2.new(0.5, -110, 0.5, -90)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.Active = true
+frame.Draggable = true
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+
+-- Outline
+local stroke = Instance.new("UIStroke", frame)
+stroke.Thickness = 2
+stroke.Color = Color3.fromRGB(110, 70, 255)
+local gradient = Instance.new("UIGradient", stroke)
+gradient.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 60, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 180, 255))
+}
+gradient.Rotation = 45
+
+-- Minimize toggle logic
+local minimized = false
+miniBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	frame.Visible = not minimized
+end)
+
+-- Toggle button creator
+local function makeToggle(label, posY)
+	local btn = Instance.new("TextButton", frame)
+	btn.Size = UDim2.new(1, -20, 0, 40)
+	btn.Position = UDim2.new(0, 10, 0, posY)
+	btn.Text = label .. ": OFF"
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 16
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.BackgroundColor3 = Color3.fromRGB(70, 0, 120)
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+	local stroke = Instance.new("UIStroke", btn)
+	stroke.Thickness = 2
+	local grad = Instance.new("UIGradient", stroke)
+	grad.Color = gradient.Color
+	grad.Rotation = 45
+	return btn
+end
+
+-- BOOST BUTTON TOGGLE
+local boostBtn = makeToggle("boost", 10)
+local boostGui, boostConn
+
+boostBtn.MouseButton1Click:Connect(function()
+	local on = boostBtn.Text:find("ON")
+	boostBtn.Text = "boost: " .. (on and "OFF" or "ON")
+	if on then
+		if boostGui then boostGui:Destroy() boostGui = nil end
+		if boostConn then boostConn:Disconnect() boostConn = nil end
+	else
+		local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if not hrp then return end
+		boostGui = Instance.new("ScreenGui", playerGui)
+		boostGui.Name = "BoostButtonGui"
+		local btn = Instance.new("TextButton", boostGui)
+		btn.Size = UDim2.new(0, 140, 0, 40)
+		btn.Position = UDim2.new(0.5, -70, 0.8, 0)
+		btn.Text = "boost"
+		btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = Enum.Font.SourceSansBold
+		btn.TextSize = 18
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 16)
+
+		local dragging, dragStart, startPos
+		btn.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				dragging = true
+				dragStart = input.Position
+				startPos = btn.Position
+				input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then dragging = false end
+				end)
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+				local delta = input.Position - dragStart
+				btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+			end
+		end)
+
+		local boosting = false
+		btn.MouseButton1Click:Connect(function()
+			boosting = not boosting
+			btn.Text = boosting and "stop" or "boost"
+			if boosting then
+				boostConn = RunService.Heartbeat:Connect(function()
+					local forward = hrp.CFrame.LookVector * 50
+					hrp.Velocity = Vector3.new(forward.X, hrp.Velocity.Y, forward.Z)
+				end)
+			else
+				if boostConn then boostConn:Disconnect() boostConn = nil end
+			end
+		end)
+	end
+end)
+
+-- STEAL HELPER TOGGLE
+local stealBtn = makeToggle("steal helper [WIP | BUGGY]", 60)
+local stealGui
+
+stealBtn.MouseButton1Click:Connect(function()
+	local on = stealBtn.Text:find("ON")
+	stealBtn.Text = "steal helper [WIP | BUGGY]: " .. (on and "OFF" or "ON")
+	if on then
+		if stealGui then stealGui:Destroy() stealGui = nil end
+	else
+		local char = player.Character or player.CharacterAdded:Wait()
+		local hum = char:WaitForChild("Humanoid")
+		local hrp = char:WaitForChild("HumanoidRootPart")
+		local skyHeight, boostedSpeed, normalSpeed = 150, 50, 16
+		local currentPlatform, isTweening = nil, false
+
+		stealGui = Instance.new("ScreenGui", playerGui)
+		stealGui.Name = "SkyGui"
+
+		local f = Instance.new("Frame", stealGui)
+		f.Size = UDim2.new(0, 180, 0, 130)
+		f.Position = UDim2.new(0.85, 0, 1, -150)
+		f.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		f.Active, f.Draggable = true, true
+		Instance.new("UICorner", f).CornerRadius = UDim.new(0, 8)
+
+		local function safeSkyTween(to)
+			isTweening = true
+			if currentPlatform then currentPlatform:Destroy() currentPlatform = nil end
+			local p = Instance.new("Part", Workspace)
+			p.Size = Vector3.new(12,1,12)
+			p.Position = to - Vector3.new(0,3,0)
+			p.Anchored, p.Transparency, p.CanCollide = true, 1, true
+			currentPlatform = p
+
+			hum.PlatformStand = true
+			for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = false end end
+
+			local bv = Instance.new("BodyVelocity", hrp)
+			bv.Velocity = (to - hrp.Position).Unit * 100
+			bv.MaxForce = Vector3.new(9e9,9e9,9e9)
+
+			local start = tick()
+			local conn; conn = RunService.Heartbeat:Connect(function()
+				if (hrp.Position - to).Magnitude < 5 or tick() - start > 2.5 then
+					bv:Destroy(); conn:Disconnect()
+					hrp.CFrame = CFrame.new(to)
+					for _, part in pairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide = true end end
+					hum.PlatformStand = false; isTweening = false
+					if to.Y < skyHeight / 2 then
+						task.delay(0.5, function()
+							if currentPlatform then currentPlatform:Destroy() currentPlatform = nil end
+						end)
+					end
+				end
+			end)
+		end
+
+		local b1 = Instance.new("TextButton", f)
+		b1.Size = UDim2.new(1, -20, 0, 40)
+		b1.Position = UDim2.new(0, 10, 0, 10)
+		b1.Text = "Sky"
+		b1.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		b1.TextColor3 = Color3.new(1, 1, 1)
+		Instance.new("UICorner", b1).CornerRadius = UDim.new(0, 6)
+
+		local b2 = Instance.new("TextButton", f)
+		b2.Size = UDim2.new(1, -20, 0, 40)
+		b2.Position = UDim2.new(0, 10, 0, 70)
+		b2.Text = "Ground"
+		b2.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+		b2.TextColor3 = Color3.new(1, 1, 1)
+		Instance.new("UICorner", b2).CornerRadius = UDim.new(0, 6)
+
+		b1.MouseButton1Click:Connect(function()
+			safeSkyTween(hrp.Position + Vector3.new(0, skyHeight, 0))
+			hum.WalkSpeed = boostedSpeed
+		end)
+		b2.MouseButton1Click:Connect(function()
+			safeSkyTween(Vector3.new(hrp.Position.X, 5, hrp.Position.Z))
+			hum.WalkSpeed = normalSpeed
+		end)
+
+		task.spawn(function()
+			while stealGui do
+				pcall(function()
+					if hum:FindFirstChild("Stun") then hum.Stun:Destroy() end
+					for _, part in ipairs(Workspace:GetDescendants()) do
+						if part:IsA("BasePart") and (part.Name:lower():find("trap") or part.Name:lower():find("net") or part.Name:lower():find("cage")) and part:IsTouching(hrp) then
+							part:Destroy()
+							hrp.CFrame += Vector3.new(0, 10, 0)
+						end
+					end
+				end)
+				task.wait(0.5)
+			end
+		end)
+	end
+end)
+
+-- ESP TOGGLE
+local espBtn = makeToggle("esp players", 110)
+local espEnabled = false
+local espParts = {}
+
+local function applyESP(plr)
+	if plr == player then return end
+	local function draw(char)
+		if espParts[plr] then 
+			for _, v in pairs(espParts[plr]) do 
+				if v then v:Destroy() 
+				end 
+			end 
+		end
+		espParts[plr] = {}
+
+		for _, part in pairs(char:GetChildren()) do
+			if part:IsA("BasePart") then
+				local box = Instance.new("BoxHandleAdornment")
+				box.Adornee = part
+				box.AlwaysOnTop = true
+				box.ZIndex = 10
+				box.Size = part.Size + Vector3.new(0.1, 0.1, 0.1)
+				box.Transparency = 0.6
+				box.Color3 = Color3.fromRGB(120, 0, 150)
+				box.Parent = part
+				table.insert(espParts[plr], box)
+			end
+		end
+
+		local head = char:FindFirstChild("Head")
+		if head then
+			local tag = Instance.new("BillboardGui", head)
+			tag.Size = UDim2.new(0, 150, 0, 25)
+			tag.StudsOffset = Vector3.new(0, 2.5, 0)
+			tag.AlwaysOnTop = true
+			local txt = Instance.new("TextLabel", tag)
+			txt.BackgroundTransparency = 1
+			txt.Text = plr.Name
+			txt.TextColor3 = Color3.new(1, 1, 1)
+			txt.Font = Enum.Font.GothamBold
+			txt.TextScaled = true
+			txt.Size = UDim2.new(1, 0, 1, 0)
+			table.insert(espParts[plr], tag)
+		end
+	end
+	if plr.Character then draw(plr.Character) end
+	plr.CharacterAdded:Connect(draw)
+end
+
+espBtn.MouseButton1Click:Connect(function()
+	espEnabled = not espEnabled
+	espBtn.Text = "esp players: " .. (espEnabled and "ON" or "OFF")
+	if espEnabled then
+		for _, p in pairs(Players:GetPlayers()) do applyESP(p) end
+		Players.PlayerAdded:Connect(applyESP)
+	else
+		for _, parts in pairs(espParts) do
+			for _, v in pairs(parts) do
+				if v then v:Destroy() end
+			end
+		end
+		espParts = {}
+	end
+end)
